@@ -1,4 +1,4 @@
-# scraper_historico.py (VERSÃO FINAL PARA GITHUB ACTIONS)
+# scraper_historico.py (VERSÃO COM LANTERNA DE DEPURAÇÃO)
 
 import gspread
 import pandas as pd
@@ -11,35 +11,28 @@ from googleapiclient.discovery import build
 from googleapiclient.http import MediaIoBaseDownload
 from core_parser import processar_pdf_completo, extrair_metadados_pdf
 
-# Aumenta o tempo de espera padrão para 60 segundos, sendo mais robusto
 httplib2.Http.DEFAULT_TIMEOUT = 60
 
 # --- Configurações ---
 NOME_ARQUIVO_CREDENCIAL = "credentials.json"
-NOME_PLANILHA = "balneabilidade_fortaleza" # <<<!!! TROQUE PELO NOME EXATO DA SUA PLANILHA !!!>>>
+NOME_PLANILHA = "balneabilidade_fortaleza" # Verifique se este nome está EXATO
 NOME_PAGINA = "DadosBalneabilidade"
-ID_PASTA_DRIVE = "1EVjIW4bITy1Jh5uqIFQ2ornZGkBgCSPe"
+ID_PASTA_DRIVE = "1EVjIW4bITy1Jh5uqIFQ2ornZGkBgCSPe" # <<<!!! GARANTA QUE ESTE É O ID DA SUA CÓPIA !!!>>>
 ARQUIVO_PDF_TEMP = "boletim_historico_temp.pdf"
 
 # --- Funções do Google ---
 def conectar_google_apis():
     scopes = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive.readonly"]
-    
-    # Procura pelo segredo no ambiente do GitHub Actions
     google_creds_json = os.getenv('GOOGLE_CREDS')
-    
     if google_creds_json:
-        # Se encontrou o segredo, usa ele
         creds_dict = json.loads(google_creds_json)
         creds = Credentials.from_service_account_info(creds_dict, scopes=scopes)
     else:
-        # Se não encontrou (rodando localmente), usa o arquivo
         creds = Credentials.from_service_account_file(NOME_ARQUIVO_CREDENCIAL, scopes=scopes)
     
     sheet_client = gspread.authorize(creds)
     spreadsheet = sheet_client.open(NOME_PLANILHA)
     sheet = spreadsheet.worksheet(NOME_PAGINA)
-    
     drive_service = build('drive', 'v3', credentials=creds)
     return sheet, drive_service
 
@@ -47,7 +40,7 @@ def obter_boletins_existentes(sheet):
     try:
         return set(sheet.col_values(8)[1:])
     except gspread.exceptions.APIError as e:
-        print(f"Erro de API ao buscar colunas: {e}. Verifique se a planilha/página existe.")
+        print(f"Erro de API ao buscar colunas: {e}.")
         return set()
 
 def adicionar_dados_planilha(sheet, df):
@@ -57,7 +50,7 @@ def adicionar_dados_planilha(sheet, df):
 
 # --- Lógica Principal ---
 def main():
-    print("Iniciando scraper histórico...")
+    print("Iniciando scraper histórico (versão com depuração)...")
     
     try:
         sheet, drive_service = conectar_google_apis()
@@ -68,6 +61,9 @@ def main():
         return
 
     try:
+        # --- NOSSA LANTERNA DE DEPURAÇÃO ---
+        print(f"--- DEBUG: Buscando na pasta com ID: {ID_PASTA_DRIVE} ---")
+        
         query = f"'{ID_PASTA_DRIVE}' in parents and name contains 'FORTALEZA' and mimeType='application/pdf'"
         
         response = drive_service.files().list(
@@ -85,6 +81,7 @@ def main():
         print(f"Erro ao listar arquivos do Google Drive: {e}")
         return
 
+    # O resto do código continua igual...
     novos_boletins_processados = 0
     for file in sorted(files, key=lambda x: x['name']):
         try:
@@ -96,11 +93,7 @@ def main():
                 _, done = downloader.next_chunk()
             
             numero_boletim, _ = extrair_metadados_pdf(ARQUIVO_PDF_TEMP)
-            if not numero_boletim:
-                print(f"Não foi possível ler metadados do arquivo: {file.get('name')}. Pulando.")
-                continue
-
-            if numero_boletim in boletins_existentes:
+            if not numero_boletim or numero_boletim in boletins_existentes:
                 continue
             
             print(f"Processando novo boletim: {numero_boletim} ({file.get('name')})")
