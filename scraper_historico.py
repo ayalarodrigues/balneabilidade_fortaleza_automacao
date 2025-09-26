@@ -18,7 +18,7 @@ httplib2.Http.DEFAULT_TIMEOUT = 60
 NOME_ARQUIVO_CREDENCIAL = "credentials.json"
 NOME_PLANILHA = "balneabilidade_fortaleza" # <<<!!! TROQUE PELO NOME EXATO DA SUA PLANILHA !!!>>>
 NOME_PAGINA = "DadosBalneabilidade"
-ID_PASTA_DRIVE = "1pz1Qq3SN0SeMyZK4RIPsEi-DpLIRbdKn"
+ID_PASTA_DRIVE = "1EVjIW4bITy1Jh5uqIFQ2ornZGkBgCSPe"
 ARQUIVO_PDF_TEMP = "boletim_historico_temp.pdf"
 
 # --- Funções do Google ---
