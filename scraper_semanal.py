@@ -8,6 +8,7 @@ import pandas as pd
 import os
 import json
 from google.oauth2.service_account import Credentials
+from googleapiclient.discovery import build
 from core_parser import processar_pdf_completo, extrair_metadados_pdf
 
 # --- Configurações ---
@@ -20,30 +21,23 @@ ARQUIVO_PDF_TEMP = "boletim_semanal_temp.pdf"
 # --- Funções do Google Sheets ---
 def conectar_google_apis():
     scopes = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive.readonly"]
-    
-    # Procura pelo segredo no ambiente do GitHub Actions
     google_creds_json = os.getenv('GOOGLE_CREDS')
-    
     if google_creds_json:
-        # Se encontrou o segredo, usa ele
         creds_dict = json.loads(google_creds_json)
         creds = Credentials.from_service_account_info(creds_dict, scopes=scopes)
     else:
-        # Se não encontrou (rodando localmente), usa o arquivo
         creds = Credentials.from_service_account_file(NOME_ARQUIVO_CREDENCIAL, scopes=scopes)
     
     sheet_client = gspread.authorize(creds)
     spreadsheet = sheet_client.open(NOME_PLANILHA)
     sheet = spreadsheet.worksheet(NOME_PAGINA)
-    
-    # Retornamos None para o drive_service pois este script não o utiliza
-    return sheet, None
+    return sheet, None # Retorna None para drive_service, já que não é usado aqui
 
 def obter_boletins_existentes(sheet):
     try:
-        return set(sheet.col_values(8)[1:]) # Pula o cabeçalho
+        return set(sheet.col_values(8)[1:])
     except gspread.exceptions.APIError as e:
-        print(f"Erro de API ao buscar colunas: {e}. Verifique se a planilha/página existe.")
+        print(f"Erro de API ao buscar colunas: {e}.")
         return set()
 
 def adicionar_dados_planilha(sheet, df):
@@ -54,7 +48,6 @@ def adicionar_dados_planilha(sheet, df):
 # --- Lógica Principal ---
 def main():
     print("Iniciando scraper semanal...")
-    
     try:
         sheet, _ = conectar_google_apis()
         boletins_existentes = obter_boletins_existentes(sheet)
@@ -71,7 +64,6 @@ def main():
         if not links_boletim:
             print("Nenhum link de boletim de Fortaleza encontrado na página.")
             return
-        
         ultimo_boletim_url = urljoin(URL_BASE, links_boletim[0])
         print(f"URL do último boletim: {ultimo_boletim_url}")
     except Exception as e:
@@ -88,14 +80,11 @@ def main():
         return
 
     numero_boletim, _ = extrair_metadados_pdf(ARQUIVO_PDF_TEMP)
-    if not numero_boletim:
-        print("Não foi possível extrair o número do boletim do PDF baixado.")
-        if os.path.exists(ARQUIVO_PDF_TEMP):
-            os.remove(ARQUIVO_PDF_TEMP)
-        return
-
-    if numero_boletim in boletins_existentes:
-        print(f"Boletim {numero_boletim} já existe na planilha. Encerrando.")
+    if not numero_boletim or numero_boletim in boletins_existentes:
+        if numero_boletim:
+            print(f"Boletim {numero_boletim} já existe na planilha. Encerrando.")
+        else:
+            print("Não foi possível extrair o número do boletim do PDF baixado.")
         if os.path.exists(ARQUIVO_PDF_TEMP):
             os.remove(ARQUIVO_PDF_TEMP)
         return
